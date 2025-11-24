@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sum leh Pai</title>
+<style>
+  body { font-family: Arial; background:#121212; color:#fff; margin:0; padding:0; }
+  header { background:#1f1f1f; padding:15px; text-align:center; font-size:22px; font-weight:bold; }
+  .container { padding:15px; }
+  .card { background:#1e1e1e; padding:15px; border-radius:12px; margin-bottom:15px; box-shadow:0 2px 10px rgba(0,0,0,0.4); }
+  input, select { width:48%; padding:10px; font-size:16px; border-radius:8px; border:1px solid #444; background:#2a2a2a; color:white; margin-bottom:10px; }
+  button { padding:10px 15px; border:none; border-radius:8px; background:#6200ee; color:white; cursor:pointer; }
+  #items .item { background:#2b2b2b; padding:12px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
+  .item span { font-size:16px; font-weight:bold; }
+  .small { font-size:12px; color:#bbb; }
+  canvas { margin-top:15px; background:#1e1e1e; border-radius:10px; padding:10px; }
+  .filter-box { display:flex; gap:10px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<header>Sum Leh Pai</header>
+
+<div class="container">
+
+  <!-- Add Item -->
+  <div class="card">
+    <input id="name" placeholder="Item name" />
+    <input id="price" type="number" placeholder="Price" />
+    <button onclick="addItem()">Add Item</button>
+  </div>
+
+  <!-- Total -->
+  <div class="card">
+    <h3>Total Spending: ₹<span id="total">0</span></h3>
+  </div>
+
+  <!-- Filters -->
+  <div class="card">
+    <h3>Filters</h3>
+    <div class="filter-box">
+      <select id="filterMonth" onchange="render()">
+        <option value="all">All Months</option>
+        <option value="current">Current Month</option>
+        <option value="previous">Previous Month</option>
+      </select>
+
+      <select id="filterPrice" onchange="render()">
+        <option value="all">All Prices</option>
+        <option value="low">Below ₹100</option>
+        <option value="mid">₹100 - ₹500</option>
+        <option value="high">Above ₹500</option>
+      </select>
+
+      <select id="filterItem" onchange="render()">
+        <option value="all">All Items</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="items" class="card"></div>
+
+  <div class="card">
+    <h3>Monthly Report</h3>
+    <button onclick="generateReport()">View Chart</button>
+    <canvas id="chart" width="350" height="250"></canvas>
+  </div>
+
+</div>
+
+<script>
+let items = JSON.parse(localStorage.getItem("items") || "[]");
+render();
+
+// --- Save Date in Standard Format YYYY-MM-DD ---
+function getToday() {
+  const d = new Date();
+  return d.toISOString().slice(0, 10);  // YYYY-MM-DD
+}
+
+function addItem(name = null, price = null) {
+  const itemName = name || document.getElementById("name").value;
+  const itemPrice = price || Number(document.getElementById("price").value);
+  if (!itemName || !itemPrice) return alert("Enter name & price");
+
+  items.push({
+    name: itemName,
+    price: itemPrice,
+    date: getToday()
+  });
+
+  render();
+}
+
+function applyFilters(item) {
+  const monthFilter = document.getElementById("filterMonth").value;
+  const priceFilter = document.getElementById("filterPrice").value;
+  const itemFilter = document.getElementById("filterItem").value;
+
+  const m = Number(item.date.slice(5, 7)); // month from YYYY-MM-DD
+  const currentMonth = new Date().getMonth() + 1;
+
+  if (monthFilter === "current" && m !== currentMonth) return false;
+  if (monthFilter === "previous" && m !== currentMonth - 1) return false;
+
+  if (priceFilter === "low" && item.price >= 100) return false;
+  if (priceFilter === "mid" && (item.price < 100 || item.price > 500)) return false;
+  if (priceFilter === "high" && item.price <= 500) return false;
+
+  if (itemFilter !== "all" && item.name !== itemFilter) return false;
+
+  return true;
+}
+
+function render() {
+  localStorage.setItem("items", JSON.stringify(items));
+
+  const itemFilter = document.getElementById("filterItem");
+  itemFilter.innerHTML = '<option value="all">All Items</option>';
+
+  [...new Set(items.map(i => i.name))].forEach(n => {
+    itemFilter.innerHTML += `<option value="${n}">${n}</option>`;
+  });
+
+  const div = document.getElementById("items");
+  div.innerHTML = "";
+
+  let total = 0;
+
+  items.filter(applyFilters).forEach((item, index) => {
+    total += item.price;
+
+    const row = document.createElement("div");
+    row.className = "item";
+    row.innerHTML = `
+      <div>
+        <span>${item.name} - ₹${item.price}</span><br>
+        <span class="small">${item.date}</span>
+      </div>
+      <div>
+        <button onclick="addItem('${item.name}', ${item.price})">+</button>
+        <button onclick="removeItem(${index})">Delete</button>
+      </div>
+    `;
+    div.appendChild(row);
+  });
+
+  document.getElementById("total").innerText = total;
+}
+
+function removeItem(i) {
+  items.splice(i, 1);
+  render();
+}
+
+function generateReport() {
+  const ctx = document.getElementById("chart").getContext("2d");
+  ctx.clearRect(0, 0, 350, 250);
+
+  let totals = {};
+
+  items.forEach(i => {
+    const m = Number(i.date.slice(5, 7));
+    totals[m] = (totals[m] || 0) + i.price;
+  });
+
+  let x = 20;
+  for (const m in totals) {
+    const h = totals[m] / 5;
+    ctx.fillStyle = "white";
+    ctx.fillRect(x, 250 - h, 40, h);
+    ctx.fillText("M" + m, x + 5, 240);
+    x += 60;
+  }
+}
+</script>
+
+</body>
+</html>
